@@ -24,5 +24,11 @@ int string_split_token(
   const char *input, size_t sz, struct token_t **tokens, size_t *len
 );
 void token_destroy(struct token_t *tokens);
+int tokens_to_string(
+  const struct token_t *tokens, size_t n, char **out, size_t *len
+);
+int tokens_to_string_raw(
+  const struct token_t *tokens, size_t n, char **out, size_t *len
+);
 
 #endif

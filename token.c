@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "token.h"
+#include "iobuf.h"
 
 static size_t utf8_charlen(unsigned char c) {
   if (c < 0x80) return 1;
@@ -194,4 +195,76 @@ clean_up:
 
 void token_destroy(struct token_t *tokens) {
   if (tokens) free(tokens);
+}
+static int tokens_to_iobuf(
+  const struct token_t *tokens, size_t n, struct iobuf_t *sb, int raw
+) {
+  size_t i;
+  const char *latex = "$$";
+  for (i = 0; i < n; i++) {
+    const char *text = tokens[i].data.buf;
+    size_t len = tokens[i].data.len;
+    if (i > 0 && iobuf_push(sb, ' ') == 0) return -1;
+    if (
+      tokens[i].type == token_latex_type ||
+      tokens[i].type == token_latex_multiline_type
+    ) {
+      while (len > 0 && isspace(text[0])) {
+        text++, len--;
+      }
+      while (len > 0 && isspace(text[len - 1])) len--;
+      if (raw) {
+        if (iobuf_push(sb, '*') == 0) return -1;
+      } else {
+        size_t slen = 1;
+        if (tokens[i].type == token_latex_multiline_type) {
+          slen = 2;
+        }
+        if (
+          iobuf_append(sb, latex, slen) == 0 ||
+          iobuf_append(sb, text, len) == 0 ||
+          iobuf_append(sb, latex, slen) == 0
+        ) {
+          return -1;
+        }
+      }
+    } else {
+      if (iobuf_append(sb, text, len) == 0) return -1;
+    }
+  }
+  return 0;
+}
+
+int tokens_to_string(
+  const struct token_t *tokens, size_t n, char **out, size_t *len
+) {
+  if (tokens) {
+    struct iobuf_t io;
+    if (iobuf_init(&io, 64)) return -1;
+    if (tokens_to_iobuf(tokens, n, &io, 0)) {
+      iobuf_free(&io);
+      return -1;
+    }
+    *out = (char *)io.buf;
+    if (len) *len = io.len;
+    return 0;
+  }
+  return -1;
+}
+
+int tokens_to_string_raw(
+  const struct token_t *tokens, size_t n, char **out, size_t *len
+) {
+  if (tokens) {
+    struct iobuf_t io;
+    if (iobuf_init(&io, 64)) return -1;
+    if (tokens_to_iobuf(tokens, n, &io, 1)) {
+      iobuf_free(&io);
+      return -1;
+    }
+    *out = (char *)io.buf;
+    if (len) *len = io.len;
+    return 0;
+  }
+  return -1;
 }
