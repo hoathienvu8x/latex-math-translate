@@ -85,7 +85,7 @@ int string_split_token(
   struct token_t *_tokens = NULL, *tmp;
   size_t count = 0;
 
-  if (!input || !tokens || !len) return -1;
+  if (!input || sz == 0 || !tokens || !len) return -1;
 
   p = input;
   end = input + sz;
@@ -99,41 +99,76 @@ int string_split_token(
 
     while (p < end && *p && isspace((unsigned char)*p)) p++;
     if (p >= end || !*p) break;
-
     if (*p == '$' && (p + 1) < end && *(p + 1) != '$') {
-      p++;
-      start = p;
+      p++, start = p;
       while (p < end && *p && *p != '$') {
         p += utf8_charlen((unsigned char)*p);
       }
       tlen = (size_t)(p - start);
       if (p < end && *p == '$') p++;
       type = token_latex_type;
-    } else if (*p == '$' && (p + 1) < end && *(p + 1) == '$') {
+    } else if (
+      (*p == '$' && (p + 1) < end && *(p + 1) == '$') ||
+      (*p == '\\' && (p + 1) < end && *(p + 1) == '[')
+    ) {
+      char end_char = (*p == '$') ? '$' : ']';
       p += 2;
       start = p;
-      while (
-        p < end &&
-        !(*p == '$' && (p + 1) < end && *(p + 1) == '$')
-      ) {
+      while (p < end) {
+        if (
+          end_char == '$' && *p == '$' &&
+          (p + 1) < end && *(p + 1) == '$'
+        ) {
+          break;
+        }
+        if (
+          end_char == ']' && *p == '\\' &&
+          (p + 1) < end && *(p + 1) == ']'
+        ) {
+          break;
+        }
         p += utf8_charlen((unsigned char)*p);
       }
       tlen = (size_t)(p - start);
-      if (p + 1 < end) p += 2;
+      if (p < end) p += 2;
       type = token_latex_multiline_type;
-    } else if (*p == '\\' && (p + 1) < end && *(p + 1) == '[') {
-      p += 2;
+    } else if (*p == '\\') {
+      size_t slash_count = 0;
       start = p;
-      while (
-        p < end &&
-        !(*p == '\\' && (p + 1) < end && *(p + 1) == ']')
-      ) {
-        p += utf8_charlen((unsigned char)*p);
+      while (p + slash_count < end && *(p + slash_count) == '\\') {
+        slash_count++;
       }
-      tlen = (size_t)(p - start);
-      if (p + 1 < end) p += 2;
-      type = token_latex_multiline_type;
 
+      if (slash_count == 2) {
+        p += 2;
+        tlen = 2;
+        type = token_latex_type;
+      } else if (
+        slash_count == 1 && (p + 1 < end) &&
+        isalpha((unsigned char)*(p + 1))
+      ) {
+        type = token_latex_type;
+        p++;
+        while (p < end && isalpha((unsigned char)*p)) p++;
+        if (p < end && *p == '{') {
+          int braces = 0;
+          while (p < end) {
+            if (*p == '{') {
+              braces++;
+            } else if (*p == '}') {
+              braces--;
+            }
+            p++;
+            if (braces == 0) break;
+          }
+        }
+        tlen = (size_t)(p - start);
+      } else {
+        char c = *p;
+        while (p < end && *p == c) p++;
+        tlen = (size_t)(p - start);
+        type = token_other_type;
+      }
     } else if (is_emoji(p, &clen) && p + clen <= end) {
       start = p;
       type = token_emoji_type;
@@ -141,107 +176,56 @@ int string_split_token(
         p += clen;
         tlen += clen;
       } while (p < end && is_emoji(p, &clen) && p + clen <= end);
-    } else if (isalpha((unsigned char)*p)) {
-      const char *q = p;
-      int has_dot = 0;
+    } else if (isalpha((unsigned char)*p) || (*p & 0x80)) {
+      start = p;
       type = token_word_type;
-      while (q < end) {
-        if (isalpha((unsigned char)*q)) {
-          q++;
-          continue;
-        }
-        if (
-          *q == '.' && (q + 1) < end &&
-          isalpha((unsigned char)*(q + 1))
-        ) {
-          has_dot = 1;
-          q += 2;
-          continue;
-        }
-        if (*q == '.' && has_dot) {
-          q++;
+      while (p < end) {
+        if (isalpha((unsigned char)*p) || (*p & 0x80)) {
+          p += utf8_charlen((unsigned char)*p);
+        } else if (isspace((unsigned char)*p) || *p == '-') {
+          const char *q = p;
+          while (q < end && isspace((unsigned char)*q)) q++;
+          if (q < end && *q == '-') {
+            q++;
+            while (q < end && isspace((unsigned char)*q)) q++;
+            if (q < end && (isalpha((unsigned char)*q) || (*q & 0x80))) {
+              p = q;
+              continue;
+            }
+          }
+          break; 
+        } else {
           break;
         }
-        break;
       }
-      start = p;
-      if (has_dot && q > p) {
-        tlen = (size_t)(q - p);
-        p = q;
-      } else {
-        while (
-          p < end && *p && !isspace((unsigned char)*p) &&
-          (isalpha((unsigned char)*p) || (*p & 0x80))
-        ) {
-          clen = utf8_charlen((unsigned char)*p);
-          p += clen;
-          tlen += clen;
-        }
-      }
+      tlen = (size_t)(p - start);
     } else if (isdigit((unsigned char)*p)) {
       int dot_seen = 0;
       start = p;
       type = token_number_type;
       while (
-        p < end && *p &&
-        !isspace((unsigned char)*p) &&
-        (isdigit((unsigned char)*p) ||
-         (*p == '.' && !dot_seen) ||
-         *p == ',')
+        p < end && (isdigit((unsigned char)*p) ||
+        (*p == '.' && !dot_seen) || *p == ',')
       ) {
         if (*p == '.') dot_seen = 1;
-        clen = utf8_charlen((unsigned char)*p);
-        p += clen;
-        tlen += clen;
+        p++;
       }
-    } else if (isalpha((unsigned char)*p) || (*p & 0x80)) {
-      const char *q = p;
-      int has_hyphen = 0;
-      type = token_word_type;
+      tlen = (size_t)(p - start);
+    } else if (ispunct((unsigned char)*p)) {
+      type = token_other_type;
       start = p;
-      while (q < end) {
-        if (isalpha((unsigned char)*q) && (*q & 0x80)) {
-          q++;
-          continue;
-        }
-        if (
-          *q == '-' && q > p && (q + 1) < end &&
-          isalpha((unsigned char)*(q + 1)) && (*(q + 1) & 0x80)
-        ) {
-          has_hyphen = 1;
-          q++;
-          continue;
-        }
-        break;
-      }
-      if (has_hyphen) {
-        tlen = (size_t)(q - p);
-        p = q;
-      } else {
-        while (
-          p < end && *p &&
-          !isspace((unsigned char)*p) &&
-          (isalpha((unsigned char)*p) || (*p & 0x80))
-        ) {
-          clen = utf8_charlen((unsigned char)*p);
-          p += clen;
-          tlen += clen;
-        }
+      while (
+        p < end && ispunct((unsigned char)*p) &&
+        *p != '$' && *p != '\\'
+      ) {
+        p++;
+        tlen = (size_t)(p - start);
       }
     } else {
-      unsigned char first = (unsigned char)*p;
       start = p;
-      if (!isalnum(first) && !isspace(first) && (first < 0x80)) {
-        while (p < end && (unsigned char)*p == first) {
-          clen = utf8_charlen((unsigned char)*p);
-          p += clen;
-          tlen = clen;
-        }
-      } else {
-        clen = utf8_charlen((unsigned char)*p);
-        p += clen;
-        tlen = clen;
-      }
+      clen = utf8_charlen((unsigned char)*p);
+      p += clen;
+      tlen = clen;
     }
 
     if (tlen == 0) continue;
@@ -249,11 +233,10 @@ int string_split_token(
     tmp = realloc(_tokens, (count + 1) * sizeof(struct token_t));
     if (!tmp) goto clean_up;
 
-    tmp[count].type = type;
-    tmp[count].data.buf = start;
-    tmp[count].data.len = tlen;
-
     _tokens = tmp;
+    _tokens[count].type = type;
+    _tokens[count].data.buf = start;
+    _tokens[count].data.len = tlen;
     count++;
   }
 
@@ -266,7 +249,6 @@ clean_up:
   return -1;
 }
 
-
 void token_destroy(struct token_t *tokens) {
   if (tokens) free(tokens);
 }
@@ -278,7 +260,6 @@ static int tokens_to_iobuf(
   for (i = 0; i < n; i++) {
     const char *text = tokens[i].data.buf;
     size_t len = tokens[i].data.len;
-    if (i > 0 && iobuf_push(sb, ' ') == 0) return -1;
     if (
       tokens[i].type == token_latex_type ||
       tokens[i].type == token_latex_multiline_type
@@ -287,6 +268,10 @@ static int tokens_to_iobuf(
         text++, len--;
       }
       while (len > 0 && isspace(text[len - 1])) len--;
+      if (len == 2 && strncmp(text, "\\\\", 2) == 0) {
+        continue;
+      }
+      if (i > 0 && iobuf_push(sb, ' ') == 0) return -1;
       if (raw) {
         if (iobuf_push(sb, '*') == 0) return -1;
       } else {
@@ -303,6 +288,7 @@ static int tokens_to_iobuf(
         }
       }
     } else {
+      if (i > 0 && iobuf_push(sb, ' ') == 0) return -1;
       if (iobuf_append(sb, text, len) == 0) return -1;
     }
   }
