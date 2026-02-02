@@ -100,20 +100,33 @@ int string_split_token(
     while (p < end && *p && isspace((unsigned char)*p)) p++;
     if (p >= end || !*p) break;
     if (*p == '$' && (p + 1) < end && *(p + 1) != '$') {
+      const char *q;
       p++, start = p;
       while (p < end && *p && *p != '$') {
         p += utf8_charlen((unsigned char)*p);
       }
       tlen = (size_t)(p - start);
       if (p < end && *p == '$') p++;
+      q = p;
+      while (q < end && isspace((unsigned char)*q)) q++;
+      if (q < end && *q == '-') {
+        const char *r = q + 1;
+        while (r < end && isspace((unsigned char)*r)) r++;
+        if (r < end && (isalpha((unsigned char)*r) || (*r & 0x80))) {
+          p = r;
+          while (p < end && (isalpha((unsigned char)*p) || (*p & 0x80))) {
+            p += utf8_charlen((unsigned char)*p);
+          }
+          tlen = (size_t)(p - start);
+        }
+      }
       type = token_latex_type;
     } else if (
       (*p == '$' && (p + 1) < end && *(p + 1) == '$') ||
       (*p == '\\' && (p + 1) < end && *(p + 1) == '[')
     ) {
       char end_char = (*p == '$') ? '$' : ']';
-      p += 2;
-      start = p;
+      p += 2, start = p;
       while (p < end) {
         if (
           end_char == '$' && *p == '$' &&
@@ -140,15 +153,13 @@ int string_split_token(
       }
 
       if (slash_count == 2) {
-        p += 2;
-        tlen = 2;
+        p += 2, tlen = 2;
         type = token_latex_type;
       } else if (
         slash_count == 1 && (p + 1 < end) &&
         isalpha((unsigned char)*(p + 1))
       ) {
-        type = token_latex_type;
-        p++;
+        type = token_latex_type, p++;
         while (p < end && isalpha((unsigned char)*p)) p++;
         if (p < end && *p == '{') {
           int braces = 0;
@@ -170,15 +181,13 @@ int string_split_token(
         type = token_other_type;
       }
     } else if (is_emoji(p, &clen) && p + clen <= end) {
-      start = p;
-      type = token_emoji_type;
+      start = p, type = token_emoji_type;
       do {
         p += clen;
         tlen += clen;
       } while (p < end && is_emoji(p, &clen) && p + clen <= end);
     } else if (isalpha((unsigned char)*p) || (*p & 0x80)) {
-      start = p;
-      type = token_word_type;
+      start = p, type = token_word_type;
       while (p < end) {
         if (isalpha((unsigned char)*p) || (*p & 0x80)) {
           p += utf8_charlen((unsigned char)*p);
@@ -201,8 +210,7 @@ int string_split_token(
       tlen = (size_t)(p - start);
     } else if (isdigit((unsigned char)*p)) {
       int dot_seen = 0;
-      start = p;
-      type = token_number_type;
+      start = p, type = token_number_type;
       while (
         p < end && (isdigit((unsigned char)*p) ||
         (*p == '.' && !dot_seen) || *p == ',')
@@ -212,8 +220,7 @@ int string_split_token(
       }
       tlen = (size_t)(p - start);
     } else if (ispunct((unsigned char)*p)) {
-      type = token_other_type;
-      start = p;
+      type = token_other_type, start = p;
       while (
         p < end && ispunct((unsigned char)*p) &&
         *p != '$' && *p != '\\'
@@ -224,8 +231,7 @@ int string_split_token(
     } else {
       start = p;
       clen = utf8_charlen((unsigned char)*p);
-      p += clen;
-      tlen = clen;
+      p += clen, tlen = clen;
     }
 
     if (tlen == 0) continue;
@@ -281,10 +287,12 @@ static int tokens_to_iobuf(
         }
         if (
           iobuf_append(sb, latex, slen) == 0 ||
-          iobuf_append(sb, text, len) == 0 ||
-          iobuf_append(sb, latex, slen) == 0
+          iobuf_append(sb, text, len) == 0
         ) {
           return -1;
+        }
+        if (strstr(text, "$-") == NULL) {
+          if (iobuf_append(sb, latex, slen) == 0) return -1;
         }
       }
     } else {
