@@ -34,7 +34,7 @@ static int read_file(const char *fpath, char **content, size_t *len) {
 
 int main(int argc, char **argv) {
   struct token_t *tokens = NULL;
-  char *content = NULL;
+  char *content = NULL, *text = NULL;
   size_t i, ntok = 0, len = 0;
   if (argc < 2) {
     return -1;
@@ -51,6 +51,14 @@ int main(int argc, char **argv) {
       "%.*s (%s)\n", (int)tokens[i].data.len, tokens[i].data.buf,
       token_type_string(tokens[i].type)
     );
+  }
+  if (tokens_to_string(tokens, ntok, &text, &len) == 0) {
+    printf("String: %.*s\n", (int)len, text);
+    free(text);
+  }
+  if (tokens_to_string_raw(tokens, ntok, &text, &len) == 0) {
+    printf("Raw: %.*s\n", (int)len, text);
+    free(text);
   }
   free(content);
   token_destroy(tokens);
