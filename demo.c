@@ -32,10 +32,26 @@ static int read_file(const char *fpath, char **content, size_t *len) {
   return 0;
 }
 
+static int is_sentence_end(const struct token_t *tok) {
+  if (
+    tok->type == token_latex_type ||
+    tok->type == token_latex_multiline_type ||
+    tok->type != token_other_type ||
+    tok->data.len != 1
+  ) {
+    return 0;
+  }
+  return (
+    tok->data.buf[0] == '.' ||
+    tok->data.buf[0] == '!' ||
+    tok->data.buf[0] == '?'
+  );
+}
+
 int main(int argc, char **argv) {
   struct token_t *tokens = NULL;
-  char *content = NULL, *text = NULL;
-  size_t i, ntok = 0, len = 0;
+  char *content = NULL;
+  size_t i, j, ntok = 0, len = 0;
   if (argc < 2) {
     return -1;
   }
@@ -46,20 +62,26 @@ int main(int argc, char **argv) {
     free(content);
     return -1;
   }
-  for (i = 0; i < ntok; i++) {
-    printf(
-      "%.*s (%s)\n", (int)tokens[i].data.len, tokens[i].data.buf,
-      token_type_string(tokens[i].type)
-    );
+  #define make_sentence(tokens, i, j) \
+    if (i > j) { \
+      char *text = NULL; \
+      size_t len = 0; \
+      if (tokens_to_string_raw( \
+        &tokens[j], i - j + 1, &text, &len \
+      ) == 0) { \
+        printf("-> %.*s\n", (int)len, text); \
+        free(text); \
+      } \
+    }
+
+  for (j = 0, i = 0; i < ntok; i++) {
+    if (is_sentence_end(&tokens[i])) {
+      make_sentence(tokens, i, j);
+      j = i + 1;
+    }
   }
-  if (tokens_to_string(tokens, ntok, &text, &len) == 0) {
-    printf("String: %.*s\n", (int)len, text);
-    free(text);
-  }
-  if (tokens_to_string_raw(tokens, ntok, &text, &len) == 0) {
-    printf("Raw: %.*s\n", (int)len, text);
-    free(text);
-  }
+  make_sentence(tokens, i, j);
+  #undef make_sentence
   free(content);
   token_destroy(tokens);
   return 0;

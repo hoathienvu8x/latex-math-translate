@@ -156,6 +156,14 @@ int string_split_token(
       while (p < end) {
         if (isalpha((unsigned char)*p) || (*p & 0x80)) {
           p += utf8_charlen((unsigned char)*p);
+        } else if (*p == '\'') {
+          const char *next = p + 1;
+          while (next < end && isspace((unsigned char)*next)) next++;
+          if (next < end && (isalpha((unsigned char)*next) || (*next & 0x80))) {
+            p = next;
+            continue;
+          }
+          break;
         } else if (isspace((unsigned char)*p) || *p == '-') {
           const char *q = p;
           while (q < end && isspace((unsigned char)*q)) q++;
@@ -235,6 +243,12 @@ static int tokens_to_iobuf(
       tokens[i].type == token_latex_type ||
       tokens[i].type == token_latex_multiline_type
     ) {
+      if (raw && i > 0 && (
+        tokens[i - 1].type == token_latex_type ||
+        tokens[i - 1].type == token_latex_multiline_type
+      )) {
+        continue;
+      }
       while (len > 0 && isspace(text[0])) {
         text++, len--;
       }
@@ -261,7 +275,12 @@ static int tokens_to_iobuf(
         }
       }
     } else {
-      if (i > 0 && iobuf_push(sb, ' ') == 0) return -1;
+      if (
+        i > 0 && (len > 1 || !(*text == '.' || *text == ':' || *text == ';' || *text == ',' || *text == '?' || *text == '!')) &&
+        iobuf_push(sb, ' ') == 0
+      ) {
+        return -1;
+      }
       if (iobuf_append(sb, text, len) == 0) return -1;
     }
   }
