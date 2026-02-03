@@ -62,12 +62,13 @@ int main(int argc, char **argv) {
     free(content);
     return -1;
   }
+  printf("Content:\n%.*s\n\n", (int)len, content);
   #define make_sentence(tokens, i, j) \
     if (i > j) { \
       char *text = NULL; \
       size_t len = 0; \
       if (tokens_to_string_raw( \
-        &tokens[j], i - j + 1, &text, &len \
+        &tokens[j], i - j, &text, &len \
       ) == 0) { \
         printf("-> %.*s\n", (int)len, text); \
         free(text); \
@@ -76,7 +77,7 @@ int main(int argc, char **argv) {
 
   for (j = 0, i = 0; i < ntok; i++) {
     if (is_sentence_end(&tokens[i])) {
-      make_sentence(tokens, i, j);
+      make_sentence(tokens, i + 1, j);
       j = i + 1;
     }
   }

@@ -231,6 +231,36 @@ clean_up:
 void token_destroy(struct token_t *tokens) {
   if (tokens) free(tokens);
 }
+static int is_token_latex(const struct token_t *tok) {
+  return (
+    tok->type == token_latex_type ||
+    tok->type == token_latex_multiline_type
+  );
+}
+static int is_token_punct(const struct token_t *tok) {
+  if (tok->data.len != 1) return 0;
+  return (
+    *tok->data.buf == '.' ||
+    *tok->data.buf == ',' ||
+    *tok->data.buf == ':' ||
+    *tok->data.buf == ';' ||
+    *tok->data.buf == '?' ||
+    *tok->data.buf == '!'
+  );
+}
+/*
+static int is_token_lbrake(const struct token_t *tok) {
+  if (tok->data.len != 1) return 0;
+  return (
+    *tok->data.buf == '(' || *tok->data.buf == '[' || *tok->data.buf == '{'
+  );
+}
+static int is_token_rbrake(const struct token_t *tok) {
+  if (tok->data.len != 1) return 0;
+  return (
+    *tok->data.buf == ')' || *tok->data.buf == ']' || *tok->data.buf == '}'
+  );
+}*/
 static int tokens_to_iobuf(
   const struct token_t *tokens, size_t n, struct iobuf_t *sb, int raw
 ) {
@@ -239,14 +269,8 @@ static int tokens_to_iobuf(
   for (i = 0; i < n; i++) {
     const char *text = tokens[i].data.buf;
     size_t len = tokens[i].data.len;
-    if (
-      tokens[i].type == token_latex_type ||
-      tokens[i].type == token_latex_multiline_type
-    ) {
-      if (raw && i > 0 && (
-        tokens[i - 1].type == token_latex_type ||
-        tokens[i - 1].type == token_latex_multiline_type
-      )) {
+    if (is_token_latex(&tokens[i])) {
+      if (raw && i > 0 && is_token_latex(&tokens[i - 1])) {
         continue;
       }
       while (len > 0 && isspace(text[0])) {
@@ -276,8 +300,7 @@ static int tokens_to_iobuf(
       }
     } else {
       if (
-        sb->len > 0 && (len > 1 || !(*text == '.' || *text == ':' || *text == ';' || *text == ',' || *text == '?' || *text == '!')) &&
-        iobuf_push(sb, ' ') == 0
+        sb->len > 0 && !is_token_punct(&tokens[i]) && iobuf_push(sb, ' ') == 0
       ) {
         return -1;
       }
