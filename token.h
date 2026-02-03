@@ -1,6 +1,8 @@
 #ifndef _TOKEN_H
 #define _TOKEN_H
 
+#include <stddef.h>
+
 struct str_t {
   const char *buf;
   size_t len;

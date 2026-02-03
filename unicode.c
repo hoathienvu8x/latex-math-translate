@@ -377,7 +377,7 @@ unsigned int utf8_codepoint(const char *p, size_t *len) {
   }
   return codepoint;
 }
-static int utf8_encode(unsigned int cp, char *out) {
+static size_t utf8_encode(unsigned int cp, char *out) {
   if (cp <= 0x7f) {
     out[0] = cp; return 1;
   } else if (cp <= 0x7ff) {
@@ -416,7 +416,7 @@ int utf8_tolower(const char *input, size_t len, char **out, size_t *sz) {
   p = input, end = input + len;
 
   while (p < end) {
-    int clen, n;
+    size_t clen, n;
     char tmp[4];    
     unsigned int cp = utf8_codepoint(p, &clen);
     if (clen <= 0) {

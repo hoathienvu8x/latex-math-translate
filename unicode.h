@@ -1,6 +1,8 @@
 #ifndef _UNICODE_H
 #define _UNICODE_H
 
+#include <stddef.h>
+
 struct utf8_lower_range {
   unsigned int start, end, delta;
 };

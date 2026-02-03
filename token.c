@@ -3,42 +3,7 @@
 #include <ctype.h>
 #include "token.h"
 #include "iobuf.h"
-
-static size_t utf8_charlen(unsigned char c) {
-  if (c < 0x80) return 1;
-  if ((c >> 5) == 0x6) return 2;
-  if ((c >> 4) == 0xe) return 3;
-  if ((c >> 3) == 0x1e) return 4;
-  return 1;
-}
-
-static unsigned int utf8_codepoint(const char *p, size_t *len) {
-  unsigned char c = (unsigned char)p[0];
-  unsigned int codepoint = 0;
-  *len = utf8_charlen(c);
-  switch (*len) {
-    case 1: {
-      codepoint = c;
-      break;
-    }
-    case 2: {
-      codepoint = ((c & 0x1F) << 6) | (p[1] & 0x3F);
-      break;
-    }
-    case 3: {
-      codepoint = ((c & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
-      break;
-    }
-    case 4: {
-      codepoint = (
-        ((c & 0x07) << 18) | ((p[1] & 0x3F) << 12) |
-        ((p[2] & 0x3F) << 6) | (p[3] & 0x3F)
-      );
-      break;
-    }
-  }
-  return codepoint;
-}
+#include "unicode.h"
 
 static int is_emoji(const char *p, size_t *len) {
   size_t clen = 0;

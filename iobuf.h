@@ -1,6 +1,8 @@
 #ifndef _IOBUF_H
 #define _IOBUF_H
 
+#include <stddef.h>
+
 struct iobuf_t {
   unsigned char *buf;
   size_t len, align;
