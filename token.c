@@ -270,9 +270,6 @@ static int tokens_to_iobuf(
     const char *text = tokens[i].data.buf;
     size_t len = tokens[i].data.len;
     if (is_token_latex(&tokens[i])) {
-      if (raw && i > 0 && is_token_latex(&tokens[i - 1])) {
-        continue;
-      }
       while (len > 0 && isspace(text[0])) {
         text++, len--;
       }
@@ -280,7 +277,12 @@ static int tokens_to_iobuf(
       if (len == 2 && strncmp(text, "\\\\", 2) == 0) {
         continue;
       }
-      if (sb->len > 0 && iobuf_push(sb, ' ') == 0) return -1;
+      if (
+        sb->len > 0 && i > 0 && !is_token_latex(&tokens[i - 1]) &&
+        iobuf_push(sb, ' ') == 0
+      ) {
+        return -1;
+      }
       if (raw) {
         if (iobuf_push(sb, '*') == 0) return -1;
       } else {

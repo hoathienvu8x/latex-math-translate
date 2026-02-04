@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "token.h"
+#include "unicode.h"
 
 static int read_file(const char *fpath, char **content, size_t *len) {
   long size;
@@ -70,7 +71,14 @@ int main(int argc, char **argv) {
       if (tokens_to_string_raw( \
         &tokens[j], i - j, &text, &len \
       ) == 0) { \
-        printf("-> %.*s\n", (int)len, text); \
+        char *lower = NULL; \
+        size_t sz = 0; \
+        if (utf8_tolower(text, len, &lower, &sz) == 0) { \
+          printf("-> [%.*s]\n", (int)sz, lower); \
+          free(lower); \
+        } else  { \
+          printf("-> %.*s\n", (int)len, text); \
+        } \
         free(text); \
       } \
     }
