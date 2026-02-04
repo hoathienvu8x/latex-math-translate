@@ -248,7 +248,7 @@ static int is_token_punct(const struct token_t *tok) {
     *tok->data.buf == '!'
   );
 }
-/*
+
 static int is_token_lbrake(const struct token_t *tok) {
   if (tok->data.len != 1) return 0;
   return (
@@ -260,7 +260,7 @@ static int is_token_rbrake(const struct token_t *tok) {
   return (
     *tok->data.buf == ')' || *tok->data.buf == ']' || *tok->data.buf == '}'
   );
-}*/
+}
 static int tokens_to_iobuf(
   const struct token_t *tokens, size_t n, struct iobuf_t *sb, int raw
 ) {
@@ -299,10 +299,14 @@ static int tokens_to_iobuf(
         }
       }
     } else {
-      if (
-        sb->len > 0 && !is_token_punct(&tokens[i]) && iobuf_push(sb, ' ') == 0
-      ) {
-        return -1;
+      if (sb->len > 0) {
+        int ok = 1;
+        if (is_token_punct(&tokens[i]) || is_token_rbrake(&tokens[i])) {
+          ok = 0;
+        } else if (i > 0 && tokens[i].type == token_word_type && is_token_lbrake(&tokens[i - 1])) {
+          ok = 0;
+        }
+        if (ok && iobuf_push(sb, ' ') == 0) return -1; 
       }
       if (iobuf_append(sb, text, len) == 0) return -1;
     }
